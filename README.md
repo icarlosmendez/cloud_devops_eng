@@ -5,4 +5,4 @@ This the the repo for my projects related to the Udacity Cloud DevOps Nano-Degre
 https://s3.console.aws.amazon.com/s3/home?region=us-east-2#
 
 #### Static Website URL: 
-dn7ewd2ed2yfg.cloudfront.net
+https://dn7ewd2ed2yfg.cloudfront.net/index.html
