@@ -1,0 +1,44 @@
+Description: 
+    Carlos Mendez / Udacity Cloud DevOps Engineering Nano-Degree
+
+    This template deploys a VPC with a pair of public and private subnets 
+    spread across two Availability Zones. It deploys an Internet Gateway,
+    with a default route on the public subnet. It also deploys a pair of 
+    NAT Gateways (one in each AZ) and defines default routes for them in 
+    their respective private subnets.
+
+Parameters:
+
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+        Default: Project_02
+
+    VpcCIDR:
+        Description: Please enter the IP range (CIDR notation) for this VPC
+        Type: String
+        Default: 10.0.0.0/16
+
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: !Ref VpcCIDR
+            EnableDnsHostnames: true
+            Tags:
+                -   Key: name
+                    Value: !Ref EnvironmentName
+
+    InternetGateway:
+        Type: ASW::EC2::InternetGateway
+        Properties:
+            Tags:
+                -   Key: name
+                    Value: !Ref EnvironmentName
+
+    InternetGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            InternetGatewayId: !Ref InternetGateway
+            VpcId: !Ref VPC
+    
