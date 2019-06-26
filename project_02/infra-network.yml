@@ -1,32 +1,57 @@
-AWSTemplateFormatVersion: "JUN2019"
+# This document uses recommendations located at the following URL:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html
 
-Description: 
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
     Carlos Mendez / Udacity Cloud DevOps Engineering Nano-Degree
 
 Metadata:
-    Lesson 3
-    This template deploys a VPC with a pair of public and private subnets 
-    spread across two Availability Zones. It deploys an Internet Gateway,
-    with a default route on the public subnet. It also deploys a pair of 
-    NAT Gateways (one in each AZ) and defines default routes for them in 
-    their respective private subnets.
+    Instances:
+        Description:
+
+            "Lesson 3; This template deploys a VPC with a pair of public and private 
+            subnets spread across two Availability Zones. It deploys an Internet Gateway,
+            with a default route on the public subnet. It also deploys a pair of 
+            NAT Gateways (one in each AZ) and defines default routes for them in 
+            their respective private subnets."
 
 Parameters:
     EnvironmentName:
         Description: An environment name that will be prefixed to resource names
         Type: String
-        Default: Project02
+        Default: project02
 
     VpcCIDR:
         Description: Please enter the IP range (CIDR notation) for this VPC
         Type: String
         Default: 10.0.0.0/16
 
-Mappings:
+    PublicSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Type: String
+        Default: 10.0.0.0/24
+
+    PublicSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Type: String
+        Default: 10.0.1.0/24
+
+    PrivateSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Type: String
+        Default: 10.0.2.0/24
+
+    PrivateSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Type: String
+        Default: 10.0.3.0/24
+
+# Mappings:
     # set of mappings
-Conditions:
+# Conditions:
     # set of conditions
-Transform:
+# Transform:
     # set of transforms
 
 Resources:
@@ -36,21 +61,96 @@ Resources:
             CidrBlock: !Ref VpcCIDR
             EnableDnsHostnames: true
             Tags:
-                - Key: name
-                  Value: !Ref EnvironmentName
+                -   Key: Name
+                    Value: !Ref EnvironmentName
 
-    InternetGateway:
+    # This is essentially equivalent of the Default Gateway on a traditional router
+    # providing WAN access from your LAN which in this case is a VLAN
+    InternetGateway: 
         Type: AWS::EC2::InternetGateway
         Properties:
             Tags:
-                - Key: name
-                  Value: !Ref EnvironmentName
+                -   Key: Name
+                    Value: !Ref EnvironmentName
 
+    # This is essentially equivalent to a port mapping for the Gateway
     InternetGatewayAttachment:
         Type: AWS::EC2::VPCGatewayAttachment
         Properties:
             InternetGatewayId: !Ref InternetGateway
             VpcId: !Ref VPC
 
-Outputs:
+    # Subnet definitions providing public and private networking spaces
+    PublicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            CidrBlock: !Ref PublicSubnet1CIDR
+            MapPublicIpOnLaunch: false
+            Tags: 
+                -   Key: Name
+                    Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+
+    PublicSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            CidrBlock: !Ref PublicSubnet2CIDR
+            MapPublicIpOnLaunch: false
+            Tags: 
+                -   Key: Name
+                    Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+
+    PrivateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            CidrBlock: !Ref PrivateSubnet1CIDR
+            MapPublicIpOnLaunch: false
+            Tags: 
+                -   Key: Name
+                    Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
+
+    PrivateSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            CidrBlock: !Ref PrivateSubnet2CIDR
+            MapPublicIpOnLaunch: false
+            Tags: 
+                -   Key: Name
+                    Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+
+    # NAT (Network Address Translation) Gateway definitions
+    # First we will allocate static IPs to be used for the NAT Gateways
+    NatGateway1EIP:
+        Type: AWS::EC2::EIP
+        DependsOn: InternetGatewayAttachment
+        Properties:
+            Domain: VPC
+
+    NatGateway2EIP:
+        Type: AWS::EC2::EIP
+        DependsOn: InternetGatewayAttachment
+        Properties:
+            Domain: VPC
+
+    # Second we will create the Gateways and have them use the IPs we just allocated
+    NatGateway1:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt NatGateway1EIP.AllocationId
+            SubnetId: !Ref PublicSubnet1
+
+    NatGateway2:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt NatGateway1EIP.AllocationId
+            SubnetId: !Ref PublicSubnet2
+
+# Outputs:
     # set of outputs
