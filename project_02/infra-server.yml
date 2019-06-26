@@ -1,25 +1,28 @@
-AWSTemplateFormatVersion: "version date"
+# This document uses recommendations located at the following URL:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html
 
-Description:
+AWSTemplateFormatVersion: "2010-09-09"
+
+# Description:
   String
 
-Metadata:
+# Metadata:
   template metadata
 
-Parameters:
+# Parameters:
   set of parameters
 
-Mappings:
+# Mappings:
   set of mappings
 
-Conditions:
+# Conditions:
   set of conditions
 
-Transform:
+# Transform:
   set of transforms
 
-Resources:
+# Resources:
   set of resources
 
-Outputs:
+# Outputs:
   set of outputs
