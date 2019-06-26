@@ -23,27 +23,27 @@ Parameters:
         Default: project02
 
     VpcCIDR:
-        Description: Please enter the IP range (CIDR notation) for this VPC
+        Description: IP range (CIDR notation) for this VPC
         Type: String
         Default: 10.0.0.0/16
 
     PublicSubnet1CIDR:
-        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Description: IP range (CIDR notation) for the corresponding subnet
         Type: String
         Default: 10.0.0.0/24
 
     PublicSubnet2CIDR:
-        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Description: IP range (CIDR notation) for the corresponding subnet
         Type: String
         Default: 10.0.1.0/24
 
     PrivateSubnet1CIDR:
-        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Description: IP range (CIDR notation) for the corresponding subnet
         Type: String
         Default: 10.0.2.0/24
 
     PrivateSubnet2CIDR:
-        Description: Please enter the IP range (CIDR notation) for the corresponding subnet
+        Description: IP range (CIDR notation) for the corresponding subnet
         Type: String
         Default: 10.0.3.0/24
 
@@ -64,7 +64,7 @@ Resources:
                 -   Key: Name
                     Value: !Ref EnvironmentName
 
-    # This is essentially equivalent of the Default Gateway on a traditional router
+    # This is essentially equivalent to a Default Gateway on a traditional router
     # providing WAN access from your LAN which in this case is a VLAN
     InternetGateway: 
         Type: AWS::EC2::InternetGateway
@@ -73,7 +73,7 @@ Resources:
                 -   Key: Name
                     Value: !Ref EnvironmentName
 
-    # This is essentially equivalent to a port mapping for the Gateway
+    # This is essentially equivalent to a port mapping for the Default Gateway
     InternetGatewayAttachment:
         Type: AWS::EC2::VPCGatewayAttachment
         Properties:
@@ -149,8 +149,98 @@ Resources:
     NatGateway2:
         Type: AWS::EC2::NatGateway
         Properties:
-            AllocationId: !GetAtt NatGateway1EIP.AllocationId
+            AllocationId: !GetAtt NatGateway2EIP.AllocationId
             SubnetId: !Ref PublicSubnet2
+
+    ### General Public Routing ###
+    # Create a Public Routing table and associate it with the VPC
+    # This table will contain rules to cover all traffic moving in or out of the VPC
+    PublicRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+            VpcId: !Ref VPC
+            Tags: 
+                - Key: Name 
+                  Value: !Sub ${EnvironmentName} Public Routes
+
+    # Define the Default Public Route and associate it with our InternetGateway
+    # This rule will direct all traffic to the Default Gateway
+    DefaultPublicRoute: 
+        Type: AWS::EC2::Route
+        DependsOn: InternetGatewayAttachment
+        Properties: 
+            RouteTableId: !Ref PublicRouteTable
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+
+    ### Specific Public Routing ###
+    # Associate the PublicRouteTable with PublicSubnet1
+    PublicSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicRouteTable
+            SubnetId: !Ref PublicSubnet1
+
+    # Associate the PublicRouteTable with PublicSubnet2
+    PublicSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicRouteTable
+            SubnetId: !Ref PublicSubnet2
+
+    ### General Private Routing ###
+    # Create a Private Routing table and associate it with the VPC
+    # Specifically associate this table with AZ1
+    PrivateRouteTable1:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: Name 
+                  Value: !Sub ${EnvironmentName} Private Routes (AZ1)
+
+    # Define the Default Private Route and associate it with NatGateway1
+    # This rule will direct all internal traffic to the NatGateway1
+    DefaultPrivateRoute1:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref PrivateRouteTable1
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGateway1
+
+    ### Specific Private Routing ###
+    # Associate the PrivateRouteTable1 with PrivateSubnet1
+    PrivateSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PrivateRouteTable1
+            SubnetId: !Ref PrivateSubnet1
+
+    # Create a Private Routing table and associate it with the VPC
+    # Specifically associate this table with AZ2
+    PrivateRouteTable2:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+            VpcId: !Ref VPC
+            Tags: 
+                - Key: Name 
+                  Value: !Sub ${EnvironmentName} Private Routes (AZ2)
+
+    # Define the Default Private Route and associate it with NatGateway2
+    # This rule will direct all internal traffic to the NatGateway2
+    DefaultPrivateRoute2:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref PrivateRouteTable2
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGateway2
+
+    # Associate the PrivateRouteTable2 with PrivateSubnet2
+    PrivateSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PrivateRouteTable2
+            SubnetId: !Ref PrivateSubnet2
 
 # Outputs:
     # set of outputs
