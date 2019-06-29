@@ -7,3 +7,8 @@
 
 aws cloudformation delete-stack \
 --stack-name $1
+
+# if [ 'aws cloudformation delete-stack project02-stack-carlos' ] 
+# then
+#     echo delete successful!
+# fi
