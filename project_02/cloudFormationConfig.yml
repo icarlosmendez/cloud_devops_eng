@@ -1,6 +1,6 @@
 Description: >
     Carlos Mendez / Udacity DevOps Engineering Nano-Degree
-    This template deploys a VPC.
+    This template deploys a VPC (Virtual Private Cloud) on AWS.
 
 Resources:
     VPC:
