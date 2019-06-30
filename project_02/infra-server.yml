@@ -106,50 +106,22 @@ Resources:
             - Ref: WebServerSecGroup
             InstanceType: t3.small
             BlockDeviceMappings:
-            - DeviceName: "/dev/sdk"
+            -   DeviceName: "/dev/sdk"
                 Ebs:
-                VolumeSize: '10' # 10GB
+                    VolumeSize: '10' # 10GB
+
     WebAppGroup:
         Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
             VPCZoneIdentifier:
-            -   Fn::ImportValue:
-                !Sub "${EnvironmentName}-PRIV-NETS"
-            LaunchConfigurationName:
-            -   Ref: WebAppLaunchConfig
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PRIV-NETS"
+            LaunchConfigurationName: 
+                Ref: WebAppLaunchConfig
             MinSize: '1'
             MaxSize: '5'
             TargetGroupARNs:
             -   Ref: WebAppTargetGroup
-    WebAppLB:
-        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-        Properties:
-            Subnets:
-            - Fn::ImportValue: !Sub "${EnvironmentName}-PUB01-SN"
-            - Fn::ImportValue: !Sub "${EnvironmentName}-PUB02-SN"
-            SecurityGroups:
-            - Ref: LBSecGroup
-    Listener:
-        Type: AWS::ElasticLoadBalancingV2::Listener
-        Properties:
-            DefaultActions:
-            -   Type: forward
-                TargetGroupARN: !Ref WebAppTargetGroup
-            LoadBalancerArn:
-                Ref: WebAppLB
-            Port: 80
-            Protocol: HTTP
-    ALBListenerRule:
-        Type: AWS::ElasticLoadBalancingV2::ListenerRule
-        Properties:
-            Actions:
-            -   Type: forward
-                TargetGroupArn: !Ref 'WebAppTargetGroup'
-            Conditions:
-            -   Field: path-pattern
-                Values: [/]
-            ListenerArn: !Ref 'Listener'
-            Priority: 1
+
     WebAppTargetGroup:
         Type: AWS::ElasticLoadBalancingV2::TargetGroup
         Properties:
@@ -164,5 +136,38 @@ Resources:
             VpcId:
                 Fn::ImportValue:
                     Fn::Sub: "${EnvironmentName}-VPCID"
+
+    WebAppLB:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            Subnets:
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PUB-SN01"
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PUB-SN02"
+            SecurityGroups:
+            - Ref: LBSecGroup
+
+    Listener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+            -   Type: forward
+                TargetGroupArn: 
+                    Ref: WebAppTargetGroup
+            LoadBalancerArn: !Ref WebAppLB
+            Port: 80
+            Protocol: HTTP
+
+    ALBListenerRule:
+        Type: AWS::ElasticLoadBalancingV2::ListenerRule
+        Properties:
+            Actions:
+            -   Type: forward
+                TargetGroupArn: !Ref WebAppTargetGroup
+            Conditions:
+            -   Field: path-pattern
+                Values: [/]
+            ListenerArn: !Ref Listener
+            Priority: 1
+
 # Outputs:
 #   set of outputs
