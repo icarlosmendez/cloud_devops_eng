@@ -1,0 +1,30 @@
+[
+    {
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "Project02"
+    },
+    {
+        "ParameterKey": "DBName",
+        "ParameterValue": "MyDatabase"
+    },
+    {
+        "ParameterKey": "DBUser",
+        "ParameterValue": "dbUser"
+    },
+    {
+        "ParameterKey": "DBPassword",
+        "ParameterValue": "dbPassword" 
+    },
+    {
+        "ParameterKey": "DBAllocatedStorage",
+        "ParameterValue": "default"
+    },
+    {
+        "ParameterKey": "DBInstanceClass",
+        "ParameterValue": "db.t2.micro"
+    },
+    {
+        "ParameterKey": "EC2SecurityGroup",
+        "ParameterValue": "default"
+    }
+]
