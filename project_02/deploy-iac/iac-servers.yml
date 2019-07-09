@@ -1,0 +1,227 @@
+# This document uses recommendations located at the following URL:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+    Carlos Mendez / Udacity Cloud DevOps Engineering Nano-Degree
+
+Metadata:
+    Instances:
+        Description:
+            
+            "Project02; Deploy a High-Availability Web App using CloudFormation 
+            and the principles of Infrastructure as Code"
+
+Parameters:
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+        Default: project02-IAC
+
+    # IAMRolePolicy:
+    #     Description: The policy document defining the IAMRole permissions
+    #     Type: String
+    #     Default: file://
+
+    InstanceType:
+        Description: 
+            
+            "The EC2 instance type - General Purpose
+            Use Cases: Micro-services, low-latency interactive applications, 
+            small and medium databases, virtual desktops, development environments, 
+            code repositories, and business-critical applications"
+        
+        Type: String
+        Default: t3.medium
+        AllowedValues: [t3.nano, t3.micro, t3.small, t3.medium, t3.large, t3.xlarge, t3.2xlarge]
+        ConstraintDescription: must select a valid general purpose instance type.
+
+# Mappings:
+#     set of mappings
+# Conditions:
+#     set of conditions
+# Transform:
+#     set of transforms
+
+Resources:
+    # IAM Role
+    # S3AccessIAMRole:
+    #     Type: AWS::IAM::Role
+    #     Properties: 
+    #         AssumeRolePolicyDocument: Json
+    #         Path: String # Default value is "/" and though not required this property might be important
+    #         Policies: 
+    #         - Policy
+    #         RoleName: String
+
+    # # IAM Policy
+    # S3AccessIAMPolicy:
+    #     Type: AWS::IAM::Policy
+    #     Properties:
+    #         PolicyDocument: Json
+    #         PolicyName: String
+    #         Roles: 
+    #             - S3AccessIAMRole
+
+    # # S3 Bucket Policy
+    # S3AccessBucketPolicy:
+    #     Type: AWS::S3::BucketPolicy
+    #     Properties:
+    #         PolicyDocument:
+    #             Id: MyPolicy
+    #             Version: '2012-10-17'
+    #             Statement:
+    #             - Sid: ReadAccess
+    #                 Action:
+    #                 - s3:GetObject
+    #                 Effect: Allow
+    #                 Resource: !Sub "arn:aws:s3:::${mybucket}/*"
+    #                 Principal:
+    #                     AWS: !GetAtt user1.Arn
+    #         Bucket: !Ref mybucket
+
+    # Security Groups
+    LoadBalancerSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow http traffic to and from load balancer
+            VpcId:
+                Fn::ImportValue:
+                    !Sub "${EnvironmentName}-VPCID"
+            SecurityGroupIngress:
+            -   IpProtocol:     tcp
+                # Describe the port range
+                FromPort:       80
+                ToPort:         80
+                # Describe the IP range
+                CidrIp:         0.0.0.0/0
+            SecurityGroupEgress:
+            -   IpProtocol:     tcp
+                # Describe the port range
+                FromPort:       80
+                ToPort:         80
+                # Describe the IP range
+                CidrIp:         0.0.0.0/0
+
+    WebServerSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow http traffic to hosts and SSH from local only
+            VpcId:
+                Fn::ImportValue:
+                    !Sub "${EnvironmentName}-VPCID"
+            SecurityGroupIngress:
+            -   IpProtocol:     tcp
+                # Describe the port range
+                FromPort:       80
+                ToPort:         80
+                # Describe the IP range
+                CidrIp:         0.0.0.0/0
+            -   IpProtocol:     tcp
+                # Describe the port range
+                FromPort:       22
+                ToPort:         22
+                # Describe the IP range
+                CidrIp:         0.0.0.0/0
+            SecurityGroupEgress:
+            -   IpProtocol:     tcp
+                # Describe the port range
+                FromPort:       0
+                ToPort:         65535
+                # Describe the IP range
+                CidrIp:         0.0.0.0/0
+
+    # Launch Configuration
+    WebAppLaunchConfig:
+        Type: AWS::AutoScaling::LaunchConfiguration
+        Properties:
+            UserData:
+                Fn::Base64: !Sub |
+                    #!/bin/bash
+                    # Server config goes here 
+                    sudo apt-get update -y
+                    # install an Apache Web Server
+                    sudo apt-get install apache2 -y
+                    # Allow apache traffic to get through the firewall
+                    # sudo ufw allow 'Apache'
+                    # start the Apache Web Server
+                    sudo systemctl start apache2.service
+                    # enable the Apache Web Server to begin responding to requests
+                    # sudo systemctl enable apache2
+                    # copy code (index.html) from S3 to the appropriate folder on the web server
+                    # /var/www/html/
+                    wget -P ../../var/www/html http://project-02-carlos.s3-website-us-west-2.amazonaws.com/test-udagram-1/index.html
+
+            ImageId: ami-07b4f3c02c7f83d59
+            # KeyName: # SSH Key value here if/when necessary
+            # Associate server instances with a SecurityGroup
+            SecurityGroups: 
+            - Ref: WebServerSecurityGroup
+            # Select instance based on usage requirements
+            # 2 vCPUs, 4GB of RAM, Ubuntu 18
+            InstanceType: !Ref 'InstanceType'
+            # Add a Volume for storage to be used by the server
+            BlockDeviceMappings:
+            -   DeviceName: "/dev/sdk"
+                Ebs:
+                    VolumeSize: '10' # 10GB
+
+    # AutoScaling group
+    WebAppGroup:
+        Type: AWS::AutoScaling::AutoScalingGroup
+        Properties:
+            VPCZoneIdentifier:
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PRIV-NETS"
+            LaunchConfigurationName: 
+                Ref: WebAppLaunchConfig
+            MinSize: '1'
+            MaxSize: '2'
+            TargetGroupARNs:
+            -   Ref: WebAppTargetGroup
+
+    ### Load Balancer Components ###
+    # Target Group, with health check
+    WebAppTargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            HealthCheckIntervalSeconds: 10
+            HealthCheckPath: /
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 8
+            HealthyThresholdCount: 2
+            Port: 80
+            Protocol: HTTP
+            UnhealthyThresholdCount: 5
+            VpcId:
+                Fn::ImportValue:
+                    Fn::Sub: "${EnvironmentName}-VPCID"
+    
+    # LoadBalancer
+    WebAppLoadBalancer:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            SecurityGroups:
+            - Ref: LoadBalancerSecurityGroup
+            Subnets:
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PRI-SN01"
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PRI-SN02"
+
+    # Listener
+    Listener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+            -   Type: forward
+                TargetGroupArn: 
+                    Ref: WebAppTargetGroup
+            LoadBalancerArn: !Ref WebAppLoadBalancer
+            Port: 80
+            Protocol: HTTP
+
+Outputs:
+    WebAppLoadBalancerDNSName:
+        Description: DNS name or Public URL of the Load Balancer
+        Value: !Join [ "", [ 'http://', !GetAtt WebAppLoadBalancer.DNSName ]]
+        Export:
+            Name: !Sub ${EnvironmentName}-LB-DNSName
