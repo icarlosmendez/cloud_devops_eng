@@ -21,8 +21,8 @@ Parameters:
         Default: MyDatabase
         Description: The database name
         Type: String
-        MinLength: '1'
-        MaxLength: '64'
+        MinLength: 1
+        MaxLength: 64
         AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
         ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
 
@@ -31,8 +31,8 @@ Parameters:
         NoEcho: true
         Description: The default Root username for the DB
         Type: String
-        MinLength: '1'
-        MaxLength: '16'
+        MinLength: 1
+        MaxLength: 16
         AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
         ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
 
@@ -46,11 +46,11 @@ Parameters:
         ConstraintDescription: must contain only alphanumeric characters.
 
     DBAllocatedStorage:
-        Default: '5'
+        Default: 5
         Description: The size of the database (Gb)
         Type: Number
-        MinValue: '5'
-        MaxValue: '1024'
+        MinValue: 5
+        MaxValue: 1024
         ConstraintDescription: must be between 5 and 1024Gb.
 
     DBInstanceClass:
