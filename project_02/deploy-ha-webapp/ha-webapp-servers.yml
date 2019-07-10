@@ -17,12 +17,37 @@ Parameters:
     EnvironmentName:
         Description: An environment name that will be prefixed to resource names
         Type: String
-        Default: project02-IAC
+        Default: project02-ha-webapp
 
     # IAMRolePolicy:
     #     Description: The policy document defining the IAMRole permissions
     #     Type: String
     #     Default: file://
+
+    # WebServerConfig:
+    #     Description:
+
+    #         "The configuration code required to install and launch Apache on the instances."
+
+    #     Type: String
+    #     Default: 
+
+    #         "#!/bin/bash
+    #         yum update -y
+    #         yum install -y httpd
+    #         systemctl start httpd
+    #         systemctl enable httpd
+    #         wget -P ../../var/www/html s3://project-02-carlos/test-udagram-1/index.html"
+
+    AccessLogsS3Bucket:
+        Description:
+
+            "S3 bucket name to place the logs in. 
+            The value of 'access_logs.s3.bucket' cannot be greater than 63 characters "
+
+        Type: String
+        Default: "project-02-carlos-logs"
+
 
     InstanceType:
         Description: 
@@ -45,6 +70,10 @@ Parameters:
 #     set of transforms
 
 Resources:
+    # The following group of resources have been configured manually via the AWS Console 
+    # but for time being I will leave these commented out here as I would prefer if these
+    # resources were created programmatically.
+    #
     # IAM Role
     # S3AccessIAMRole:
     #     Type: AWS::IAM::Role
@@ -76,7 +105,7 @@ Resources:
     #                 Action:
     #                 - s3:GetObject
     #                 Effect: Allow
-    #                 Resource: !Sub "arn:aws:s3:::${mybucket}/*"
+    #                 Resource: !Sub "arn:aws:s3:::${AccessLogsS3Bucket}/*"
     #                 Principal:
     #                     AWS: !GetAtt user1.Arn
     #         Bucket: !Ref mybucket
@@ -118,12 +147,12 @@ Resources:
                 ToPort:         80
                 # Describe the IP range
                 CidrIp:         0.0.0.0/0
-            -   IpProtocol:     tcp
-                # Describe the port range
-                FromPort:       22
-                ToPort:         22
-                # Describe the IP range
-                CidrIp:         0.0.0.0/0
+            # -   IpProtocol:     tcp
+            #     # Describe the port range
+            #     FromPort:       22
+            #     ToPort:         22
+            #     # Describe the IP range
+            #     CidrIp:         0.0.0.0/0
             SecurityGroupEgress:
             -   IpProtocol:     tcp
                 # Describe the port range
@@ -139,22 +168,28 @@ Resources:
             UserData:
                 Fn::Base64: !Sub |
                     #!/bin/bash
-                    # Server config goes here 
-                    sudo apt-get update -y
-                    # install an Apache Web Server
-                    sudo apt-get install apache2 -y
-                    # Allow apache traffic to get through the firewall
+                    # # Server config goes here 
+                    # sudo apt-get update -y
+                    # # install an Apache Web Server
+                    # sudo apt-get install apache2 -y
+                    # # Allow apache traffic to get through the firewall
                     # sudo ufw allow 'Apache'
-                    # start the Apache Web Server
-                    sudo systemctl start apache2.service
-                    # enable the Apache Web Server to begin responding to requests
-                    # sudo systemctl enable apache2
-                    # copy code (index.html) from S3 to the appropriate folder on the web server
-                    # /var/www/html/
-                    wget -P ../../var/www/html http://project-02-carlos.s3-website-us-west-2.amazonaws.com/test-udagram-1/index.html
+                    # # start the Apache Web Server
+                    # sudo systemctl start apache2.service
+                    # # enable the Apache Web Server to begin responding to requests
+                    # sudo systemctl enable apache2.service
+                    # # copy code (index.html) from S3 to the appropriate folder on the web server
+                    # # /var/www/html/
+                    # wget -P ../../var/www/html s3://project-02-carlos/test-udagram-1/index.html
+
+                    yum update -y
+                    yum install -y httpd
+                    systemctl start httpd
+                    systemctl enable httpd
+                    wget -P ../../var/www/html s3://project-02-carlos/test-udagram-1/index.html
 
             ImageId: ami-07b4f3c02c7f83d59
-            # KeyName: # SSH Key value here if/when necessary
+            KeyName: EC2InstanceAdministratorKey # SSH Key value here if/when necessary
             # Associate server instances with a SecurityGroup
             SecurityGroups: 
             - Ref: WebServerSecurityGroup
@@ -172,7 +207,7 @@ Resources:
         Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
             VPCZoneIdentifier:
-            - Fn::ImportValue: !Sub "${EnvironmentName}-PRIV-NETS"
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PRI-NETS"
             LaunchConfigurationName: 
                 Ref: WebAppLaunchConfig
             MinSize: '1'
@@ -201,11 +236,16 @@ Resources:
     WebAppLoadBalancer:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
         Properties:
+            LoadBalancerAttributes:
+             -  Key: access_logs.s3.enabled
+                Value: true
+                Key: access_logs.s3.bucket
+                Value: !Ref AccessLogsS3Bucket
             SecurityGroups:
             - Ref: LoadBalancerSecurityGroup
             Subnets:
-            - Fn::ImportValue: !Sub "${EnvironmentName}-PRI-SN01"
-            - Fn::ImportValue: !Sub "${EnvironmentName}-PRI-SN02"
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PUB-SN01"
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PUB-SN02"
 
     # Listener
     Listener:
@@ -218,6 +258,19 @@ Resources:
             LoadBalancerArn: !Ref WebAppLoadBalancer
             Port: 80
             Protocol: HTTP
+
+    # Listner Rule
+    ALBListenerRule:
+        Type: AWS::ElasticLoadBalancingV2::ListenerRule
+        Properties:
+            Actions:
+            -   Type: forward
+                TargetGroupArn: !Ref WebAppTargetGroup
+            Conditions:
+            -   Field: path-pattern
+                Values: [/]
+            ListenerArn: !Ref Listener
+            Priority: 1
 
 Outputs:
     WebAppLoadBalancerDNSName:
