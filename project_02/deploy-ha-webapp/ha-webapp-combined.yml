@@ -1,0 +1,709 @@
+# This document uses recommendations located at the following URL:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html
+
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description:
+    Carlos Mendez / Udacity Cloud DevOps Engineering Nano-Degree
+    
+    Project 02; This template deploys a VPC with an Internet Gateway and associated 
+    InternetGatewayAttachement to direct traffic in and out of the VPC. There are a 
+    pair of public and private subnets, one of each in their own Availability Zone. 
+    The public subnets will both have a NAT Gateway to ensure traffic is able to move 
+    from the private to the public subnets and eventually out to the broader internet.
+    An AutoScalingGroup will allow for the servers to scale up during times of high 
+    demand or technical problems with an instance. A Load Balancer will reside in the 
+    VPC to distribute requests across the multiple web server instances. 
+    There will be an S3 Bucket as well where the website files will be copied from to 
+    the web servers.
+
+Metadata:
+    AWS::CloudFormation::Interface:
+        ParameterGroups:
+        - Label:
+            default: VPC configuration parameters
+        
+        Parameters:
+        - VPCCIDR
+        - PublicSubnet01CIDR
+        - PublicSubnet02CIDR
+        - PrivateSubnet01CIDR
+        - PrivateSubnet02CIDR
+        - SSHLocation
+        - KeyPairName
+
+        ParameterLabels:
+            VPCCIDR:
+                default: Enter CIDR of new VPC
+            PublicSubnet01CIDR:
+                default: Enter CIDR of the public subnet
+            PublicSubnet02CIDR:
+                default: Enter CIDR of the public subnet
+            PrivateSubnet01CIDR:
+                default: Enter CIDR of the private subnet
+            PrivateSubnet02CIDR:
+                default: Enter CIDR of the private subnet
+            SSHLocation:
+                default: Subnet allowed to ssh on TCP to public subnet
+            KeyPairName:
+                default: Key pair for bastion host
+
+Parameters:
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+        Default: project02-ha-webapp
+
+    VPCCIDR:
+        AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+        ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+        Default: 10.0.0.0/16
+        Description: CIDR block for entire VPC.
+        Type: String
+    
+    PublicSubnet01CIDR:
+        AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+        ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+        Default: 10.0.0.0/24
+        Description: CIDR block for public subnet 01
+        Type: String
+    
+    PublicSubnet02CIDR:
+        AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+        ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+        Default: 10.0.1.0/24
+        Description: CIDR block for public subnet 02
+        Type: String
+    
+    PrivateSubnet01CIDR:
+        AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+        ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+        Default: 10.0.2.0/24
+        Description: CIDR block for private subnet 01
+        Type: String
+
+    PrivateSubnet02CIDR:
+        AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+        ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+        Default: 10.0.3.0/24
+        Description: CIDR block for private subnet 02
+        Type: String
+    
+    SSHLocation:
+        AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(/([0-9]|[1-2][0-9]|3[0-2]))$
+        ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/0-28
+        Default: 0.0.0.0/0
+        Description: Network allowed to ssh to instances in public subnet.
+        Type: String
+    
+    KeyPairName:
+        Description: Keypair for Linux bastion host
+        Type: AWS::EC2::KeyPair::KeyName
+        Default: EC2InstanceAdministratorKey
+
+    InstanceType:
+        Description: 
+            "The EC2 instance type - General Purpose
+            Use Cases: Micro-services, low-latency interactive applications, 
+            small and medium databases, virtual desktops, development environments, 
+            code repositories, and business-critical applications"
+        Type: String
+        Default: t3.medium
+        AllowedValues: [t3.nano, t3.micro, t3.small, t3.medium, t3.large, t3.xlarge, t3.2xlarge]
+        ConstraintDescription: must select a valid general purpose instance type.
+
+    Bucket:
+        Description: 'Bucket containing web files'
+        Type: String
+        Default: 'project-02-carlos'
+
+    AccessLogsS3Bucket:
+        Description:
+            "S3 bucket name to place the logs in. 
+            The value of 'access_logs.s3.bucket' cannot be greater than 63 characters"
+        Type: String
+        Default: "project-02-carlos-logs"
+
+Mappings:
+    RegionMap:
+        us-east-1:
+            AMI: ami-22ce4934
+        us-west-1:
+            AMI: ami-9e247efe
+        us-east-2:
+            AMI: ami-7bfcd81e
+        us-west-2:
+            AMI: ami-8ca83fec
+
+Resources:
+    ### IAM Roles and Policies ###
+    # The following group of resources are referenced from the following URL
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    #
+    # IAM Role
+    S3AccessIAMRole:
+        Type: AWS::IAM::Role
+        Properties: 
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                -   Effect: Allow
+                    Principal:
+                        Service:
+                        -   ec2.amazonaws.com
+                    Action:
+                    -   sts:AssumeRole
+            Path: "/" # Default value is "/" and is not required unless you need somthing specific
+    
+    # IAM Policy
+    S3AccessIAMPolicy:
+        Type: AWS::IAM::Policy
+        Properties:
+            PolicyDocument:
+                Statement:
+                -   Effect: Allow
+                    Action:
+                    -   s3:GetObject*
+                    Resource: "*"
+            PolicyName: S3AccessIAMPolicy
+            Roles:
+            -   Ref: S3AccessIAMRole
+
+    # Instance Profile
+    S3AccessInstanceProfile:
+        Type: AWS::IAM::InstanceProfile
+        Properties:
+            Path: "/"
+            Roles:
+            -   Ref: S3AccessIAMRole
+
+
+    # S3 Bucket Policy # Not entirely sure whether this is useful or necessary for this project
+    S3AccessBucketPolicy:
+        Type: AWS::S3::BucketPolicy
+        Properties:
+            Bucket: !Ref Bucket
+            PolicyDocument:
+                Statement:
+                -   Action:
+                    -   s3:GetObject
+                    Effect: Allow
+                    Principal: '*'
+                    Resource:
+                        Fn::Join: 
+                        -   ""
+                        - 
+                            - "arn:aws:s3:::"
+                            - 
+                                Ref: "Bucket"
+                            -   "/*" 
+            
+
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: !Ref VPCCIDR
+            EnableDnsSupport: true
+            EnableDnsHostnames: true
+            Tags:
+            -   Key: Name
+                Value: !Sub VPC ${VPCCIDR}
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+    
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+            -   Key: Name
+                Value: InternetGateway
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+    
+    InternetGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            InternetGatewayId: !Ref InternetGateway
+            VpcId: !Ref VPC
+
+
+    ### Subnets ###
+
+    # Subnet definitions providing public networking spaces
+    PublicSubnet01:
+        Type: AWS::EC2::Subnet
+        Properties:
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            CidrBlock: !Ref PublicSubnet01CIDR
+            MapPublicIpOnLaunch: true
+            Tags:
+            -   Key: Name
+                Value: !Sub Public ${PublicSubnet01CIDR}
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+
+    PublicSubnet02:
+        Type: AWS::EC2::Subnet
+        Properties:
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            CidrBlock: !Ref PublicSubnet02CIDR
+            MapPublicIpOnLaunch: true
+            Tags:
+            -   Key: Name
+                Value: !Sub Public ${PublicSubnet02CIDR}
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+    
+    # Subnet definitions providing private networking spaces
+    PrivateSubnet01:
+        Type: AWS::EC2::Subnet
+        Properties:
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            CidrBlock: !Ref PrivateSubnet01CIDR
+            Tags:
+            -   Key: Name
+                Value: !Sub Private ${PrivateSubnet01CIDR}
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+
+    PrivateSubnet02:
+        Type: AWS::EC2::Subnet
+        Properties:
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            CidrBlock: !Ref PrivateSubnet02CIDR
+            Tags:
+            -   Key: Name
+                Value: !Sub Private ${PrivateSubnet02CIDR}
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+    
+
+    ### NAT Gateways (Network Address Translation) ###
+    
+    # First we will allocate static or "Elastic" IPs to be used for the NAT Gateways
+    NatGateway01EIP:
+        Type: AWS::EC2::EIP
+        DependsOn: InternetGatewayAttachment
+        Properties:
+            Domain: vpc
+
+    NatGateway02EIP:
+        Type: AWS::EC2::EIP
+        DependsOn: InternetGatewayAttachment
+        Properties:
+            Domain: vpc
+    
+    # Second we will create the Gateways and have them use the EIPs we just allocated
+    NatGateway01:
+        DependsOn: InternetGatewayAttachment
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt NatGateway01EIP.AllocationId
+            SubnetId: !Ref PublicSubnet01
+            Tags:
+            -   Key: Name
+                Value: NatGateway01
+
+    NatGateway02:
+        DependsOn: InternetGatewayAttachment
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt NatGateway02EIP.AllocationId
+            SubnetId: !Ref PublicSubnet02
+            Tags:
+            -   Key: Name
+                Value: NatGateway02
+    
+
+    ### Routing ###
+
+    ## General Public Routing ##
+    # Create a Public Routing table and associate it with the VPC
+    # This table will contain rules to cover all traffic moving in or out of the VPC
+    PublicSubnetRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            Tags:
+            -   Key: Name
+                Value: !Sub ${EnvironmentName} Public Routes
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+
+    
+    ## Specific Public Routing ##
+    # Define the Default Public Route and associate it with our InternetGateway
+    # This rule will direct all outbound traffic to the Default Gateway or InternetGateway
+    PublicSubnetRoute:
+        Type: AWS::EC2::Route
+        DependsOn: InternetGatewayAttachment
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+            RouteTableId: !Ref PublicSubnetRouteTable
+
+    ## Public Route Table Associations ##
+    # Associate the PublicSubnet01RouteTable with PublicSubnet01
+    PublicSubnet01RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicSubnetRouteTable
+            SubnetId: !Ref PublicSubnet01
+
+    # Associate the PublicSubnet02RouteTable with PublicSubnet01
+    PublicSubnet02RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicSubnetRouteTable
+            SubnetId: !Ref PublicSubnet02
+    
+    ### General Private Routing ###
+    # Create a Private Routing table and associate it with PrivateSubnet01
+    PrivateSubnet01RouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            Tags:
+            -   Key: Name
+                Value: !Sub ${EnvironmentName} Private Routes (AZ-A)
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+
+    # Create a Private Routing table and associate it with PrivateSubnet02
+    PrivateSubnet02RouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            Tags:
+            -   Key: Name
+                Value: !Sub ${EnvironmentName} Private Routes (AZ-B)
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+    
+    ## Specific Private Routing ##
+    # Define the PrivateSubnet01 Route and associate it with NatGateway01
+    # This rule will direct internal traffic on Subnet01 to the NatGateway01
+    PrivateSubnet01Route:
+        Type: AWS::EC2::Route
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGateway01
+            RouteTableId: !Ref PrivateSubnet01RouteTable
+    
+    # Define the Default Private Route and associate it with NatGateway02
+    # This rule will direct all internal traffic to the NatGateway02
+    PrivateSubnet02Route:
+        Type: AWS::EC2::Route
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGateway02
+            RouteTableId: !Ref PrivateSubnet02RouteTable
+
+    ## Private Route Table Associations ##
+    # Associate the PrivateRouteTable01 with PrivateSubnet01
+    PrivateSubnet01RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PrivateSubnet01RouteTable
+            SubnetId: !Ref PrivateSubnet01
+
+    # Associate the PrivateRouteTable01 with PrivateSubnet02
+    PrivateSubnet02RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PrivateSubnet02RouteTable
+            SubnetId: !Ref PrivateSubnet02
+    
+
+    ### Security Groups ###
+    BationHostSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Enable SSH access via port 22
+            SecurityGroupIngress:
+            -   CidrIp:     !Ref SSHLocation    # Describe the IP range
+                IpProtocol: tcp
+                FromPort:   22                  # Describe the port range
+                ToPort:     22
+            Tags:
+            -   Key: Name
+                Value: !Sub BationHostSecurityGroup ${VPCCIDR}
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+            VpcId: !Ref VPC
+    
+    LoadBalancerSecurityGroup: #TODO: See if we really need this SecurityGroup
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow http traffic to and from load balancer
+            SecurityGroupIngress:
+            -   CidrIp:     !Ref SSHLocation    # Describe the IP range
+                IpProtocol: tcp
+                FromPort:   22                  # Describe the port range
+                ToPort:     22
+            -   CidrIp:     0.0.0.0/0           # Describe the IP range
+                IpProtocol: tcp
+                FromPort:   80                  # Describe the port range
+                ToPort:     80
+            SecurityGroupEgress:
+            -   CidrIp:     0.0.0.0/0           # Describe the IP range
+                IpProtocol: tcp
+                FromPort:   80                  # Describe the port range
+                ToPort:     80
+            Tags:
+            -   Key: Name
+                Value: !Sub LoadBalancerSecurityGroup ${VPCCIDR}
+            VpcId: !Ref VPC
+
+    WebServerSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow http traffic to hosts from outsite and SSH via Bastion Host
+            SecurityGroupIngress:
+            -   CidrIp:     0.0.0.0/0           # Describe the IP range
+                IpProtocol: tcp
+                FromPort:   22                  # Describe the port range
+                ToPort:     22
+            -   CidrIp:     0.0.0.0/0           # Describe the IP range
+                IpProtocol: tcp
+                FromPort:   80                  # Describe the port range
+                ToPort:     80
+            Tags:
+            -   Key: Name
+                Value: !Sub WebServerSecurityGroup
+            VpcId: !Ref VPC
+    
+
+    ### Load Balancer Components ###    
+    # LoadBalancer
+    WebAppLoadBalancer:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            LoadBalancerAttributes:
+             -  Key: access_logs.s3.enabled
+                Value: true
+                Key: access_logs.s3.bucket
+                Value: !Ref AccessLogsS3Bucket
+            SecurityGroups:
+            # -   Ref: LoadBalancerSecurityGroup
+            -   Ref: WebServerSecurityGroup
+            Subnets:
+            # -   Ref: PublicSubnet01
+            # -   Ref: PublicSubnet02
+            -   Ref: PrivateSubnet01
+            -   Ref: PrivateSubnet02
+            Tags:
+            -   Key: Name
+                Value: !Sub ${EnvironmentName}-WebAppLoadBalancer
+
+    # Listener
+    Listener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+            -   Type: forward
+                TargetGroupArn: !Ref WebAppTargetGroup
+            LoadBalancerArn: !Ref WebAppLoadBalancer
+            Port: 80
+            Protocol: HTTP
+
+    # Listner Rule # Not sure whether this is necessary?
+    ALBListenerRule:
+        Type: AWS::ElasticLoadBalancingV2::ListenerRule
+        Properties:
+            Actions:
+            -   Type: forward
+                TargetGroupArn: !Ref WebAppTargetGroup
+            Conditions:
+            -   Field: path-pattern
+                Values: [/]
+            ListenerArn: !Ref Listener
+            Priority: 1
+
+    # Target Group, with health check
+    WebAppTargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            TargetType: instance
+            HealthCheckIntervalSeconds: 10
+            HealthCheckPath: /
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 8
+            HealthyThresholdCount: 2
+            Port: 80
+            Protocol: HTTP
+            UnhealthyThresholdCount: 5
+            VpcId: !Ref VPC
+            Tags:
+            -   Key: Name
+                Value: !Sub WebAppTargetGroup
+
+
+    ### EC2 Instances ###
+    
+    # Bastion Host for SSH access to Webserver instances in Private Subnet
+    BastionHost:
+        Type: AWS::EC2::Instance
+        DependsOn:
+        - InternetGatewayAttachment
+        Properties:
+            KeyName: !Ref KeyPairName
+            ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+            InstanceType: t2.micro
+            NetworkInterfaces:
+            -   AssociatePublicIpAddress: true
+                DeleteOnTermination: true
+                Description: ENI for bastion host
+                DeviceIndex: 0
+                SubnetId: !Ref PublicSubnet01
+                GroupSet:
+                - !Ref BationHostSecurityGroup
+            Tags:
+            -   Key: Name
+                Value: !Sub ${EnvironmentName}-BastionHost
+            -   Key: CloudFormationStack
+                Value: !Ref AWS::StackId
+
+    # AutoScaling group
+    WebAppGroup:
+        Type: AWS::AutoScaling::AutoScalingGroup
+        Properties:
+            LaunchConfigurationName: 
+                Ref: WebAppLaunchConfig
+            MinSize: '1'
+            MaxSize: '2'
+            TargetGroupARNs:
+            -   Ref: WebAppTargetGroup
+            VPCZoneIdentifier:
+            # Deploy the instances into the Private Subnets
+            -   Ref: PrivateSubnet01
+            -   Ref: PrivateSubnet02
+    
+    # Launch Configuration
+    WebAppLaunchConfig:
+        Type: AWS::AutoScaling::LaunchConfiguration
+        Properties:
+            UserData:
+                Fn::Base64: !Sub |
+                    #!/bin/bash
+                    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+                    yum update -y
+                    echo "Hello from user-data!"
+
+                    yum install -y httpd
+                    systemctl start httpd
+                    systemctl enable httpd
+                    # wget -P ../../var/www/html s3://project-02-carlos/index.html
+                    wget -P ../../var/www/html https://project-02-carlos.s3-us-west-2.amazonaws.com/index.html
+
+            ImageId: ami-0f2176987ee50226e # Amazon Linux
+            # Select instance based on usage requirements
+            # 2 vCPUs, 4GB of RAM, Linux AMI
+            InstanceType: !Ref InstanceType
+            KeyName: !Ref KeyPairName # SSH Key value here if/when necessary
+            # Associate server instances with a SecurityGroup
+            SecurityGroups: 
+            -   Ref: WebServerSecurityGroup
+            # Add a Volume for storage to be used by the server
+            BlockDeviceMappings:
+            -   DeviceName: "/dev/sdk"
+                Ebs:
+                    VolumeSize: 10 # 10GB
+
+
+Outputs:
+    # Network related Outputs
+    VPCID:
+        Description: VPCID of the newly created VPC
+        Value: !Ref VPC
+        Export:
+            Name: !Sub ${EnvironmentName}-VPCID
+    
+    # NAT related Outputs
+    NatGateway01:
+        Description: NAT gateway instance
+        Value: !Ref NatGateway01
+    NatGateway02:
+        Description: NAT gateway instance
+        Value: !Ref NatGateway02
+    EIPAddress01:
+        Description: EIP allocated to NAT gateway
+        Value: !Ref NatGateway01EIP
+    EIPAddress02:
+        Description: EIP allocated to NAT gateway
+        Value: !Ref NatGateway02EIP
+    
+    # Subnet related Outputs
+    PublicSubnets:
+        Description: A list of the public subnets in the project
+        Value: !Join [ ",",  [ !Ref PublicSubnet01, !Ref PublicSubnet02 ]]
+        Export:
+            Name: !Sub ${EnvironmentName}-PUB-NETS
+    PublicSubnet01:
+        Description: SubnetId of the public subnet
+        Value: !Ref PublicSubnet01
+        Export:
+            Name: !Sub ${EnvironmentName}-PUB-SN01
+    PublicSubnet02:
+        Description: SubnetId of the public subnet
+        Value: !Ref PublicSubnet02
+        Export:
+            Name: !Sub ${EnvironmentName}-PUB-SN02
+    PrivateSubnets:
+        Description: A list of the private subnets in the project
+        Value: !Join [ ",",  [ !Ref PrivateSubnet01, !Ref PrivateSubnet02 ]]
+        Export:
+            Name: !Sub ${EnvironmentName}-PRI-NETS
+    PrivateSubnet01:
+        Description: SubnetId of the public subnet
+        Value: !Ref PrivateSubnet01
+    PrivateSubnet02:
+        Description: SubnetId of the public subnet
+        Value: !Ref PrivateSubnet02
+    PublicSubnet01RouteTable:
+        Description: Public route table
+        Value: !Ref PublicSubnetRouteTable
+    PublicSubnet02RouteTable:
+        Description: Public route table
+        Value: !Ref PublicSubnetRouteTable
+    PrivateSubnet01RouteTable:
+        Description: Private route table
+        Value: !Ref PrivateSubnet01RouteTable
+    PrivateSubnet02RouteTable:
+        Description: Private route table
+        Value: !Ref PrivateSubnet02RouteTable
+    
+    # SecurityGroup related Outputs
+    BationHostSecurityGroup:
+        Description: SecurityGroup for BastionHost in public subnet
+        Value: !Ref BationHostSecurityGroup
+    WebServerSecurityGroup:
+        Description: SecurityGroup for instances in private subnet
+        Value: !Ref WebServerSecurityGroup
+    
+
+    # Instance related Outputs
+    BastionHost:
+        Description: Linux bastion instance
+        Value: !Ref BastionHost
+    BastionHostIP:
+        Description: BastionHost public IP address
+        Value: !GetAtt BastionHost.PublicIp
+        Export:
+            Name: !Sub ${EnvironmentName}-BastionHostIP
+    BastionHostDNS:
+        Description: BastionHost public DNS name
+        Value: !GetAtt BastionHost.PublicDnsName
+        Export:
+            Name: !Sub ${EnvironmentName}-BastionHostDNS
+
+    # Load Balancer related Outputs
+    WebAppLoadBalancerDNSName:
+        Description: DNS name or Public URL of the Load Balancer
+        Value: !Join [ "", [ 'http://', !GetAtt WebAppLoadBalancer.DNSName ]]
+        Export:
+            Name: !Sub ${EnvironmentName}-LB-DNSName
