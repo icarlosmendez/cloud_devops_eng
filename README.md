@@ -11,6 +11,9 @@ https://dn7ewd2ed2yfg.cloudfront.net/index.html
 ### Project_02: Deploy High Availability Website on AWS
 There are no live assets to refer to for this project. 
 
+#### Project YAML file:
+https://github.com/icarlosmendez/cloud_devops_eng/blob/master/project_02/deploy-ha-webapp/ha-webapp-combined.yml
+
 #### Infrastructure Diagram:
 https://github.com/icarlosmendez/cloud_devops_eng/blob/master/project_02/deploy-ha-webapp/ha-webapp-diagram.pdf
 
