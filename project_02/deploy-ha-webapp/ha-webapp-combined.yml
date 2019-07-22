@@ -379,7 +379,7 @@ Resources:
             SubnetId: !Ref PublicSubnet02
     
     ### General Private Routing ###
-    # Create a Private Routing table and associate it with PrivateSubnet01
+    # Create a Private Routing table to be associated with PrivateSubnet01 located in Availability Zone A
     PrivateSubnet01RouteTable:
         Type: AWS::EC2::RouteTable
         Properties:
@@ -390,7 +390,7 @@ Resources:
                 Value: !Ref AWS::StackId
             VpcId: !Ref VPC
 
-    # Create a Private Routing table and associate it with PrivateSubnet02
+    # Create a Private Routing table to be associated with PrivateSubnet02 located in Availability Zone B
     PrivateSubnet02RouteTable:
         Type: AWS::EC2::RouteTable
         Properties:
@@ -403,7 +403,7 @@ Resources:
     
     ## Specific Private Routing ##
     # Define the PrivateSubnet01 Route and associate it with NatGateway01
-    # This rule will allow internal traffic to be directed to NatGateway01 by the LoadBalancer
+    # This rule will allow inbound traffic to be directed to NatGateway01 by the LoadBalancer
     PrivateSubnet01Route:
         Type: AWS::EC2::Route
         Properties:
@@ -412,7 +412,7 @@ Resources:
             RouteTableId: !Ref PrivateSubnet01RouteTable
     
     # Define the Default Private Route and associate it with NatGateway02
-    # This rule will allow internal traffic to be directed to NatGateway02 by the LoadBalancer
+    # This rule will allow inbound traffic to be directed to NatGateway02 by the LoadBalancer
     PrivateSubnet02Route:
         Type: AWS::EC2::Route
         Properties:
@@ -421,14 +421,14 @@ Resources:
             RouteTableId: !Ref PrivateSubnet02RouteTable
 
     ## Private Route Table Associations ##
-    # Associate the PrivateRouteTable01 with PrivateSubnet01
+    # Associate the PrivateSubnet01RouteTable with PrivateSubnet01
     PrivateSubnet01RouteTableAssociation:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             RouteTableId: !Ref PrivateSubnet01RouteTable
             SubnetId: !Ref PrivateSubnet01
 
-    # Associate the PrivateRouteTable01 with PrivateSubnet02
+    # Associate the PrivateSubnet02RouteTable with PrivateSubnet02
     PrivateSubnet02RouteTableAssociation:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
@@ -459,10 +459,6 @@ Resources:
         Properties:
             GroupDescription: Allow http traffic to and from load balancer
             SecurityGroupIngress:
-            # -   CidrIp:     !Ref SSHLocation    # Describe the IP range
-            #     IpProtocol: tcp
-            #     FromPort:   22                  # Describe the port range
-            #     ToPort:     22
             -   CidrIp:     0.0.0.0/0           # Describe the IP range
                 IpProtocol: tcp
                 FromPort:   80                  # Describe the port range
@@ -514,7 +510,7 @@ Resources:
                 Value: !Ref AccessLogsS3Bucket
             SecurityGroups:
             -   Ref: LoadBalancerSecurityGroup
-            Subnets: # The subnets property here should always and only point to your public subnets
+            Subnets: # The subnets property here should always and only point to your public subnets in this architecture
             -   Ref: PublicSubnet01
             -   Ref: PublicSubnet02
             Tags:
