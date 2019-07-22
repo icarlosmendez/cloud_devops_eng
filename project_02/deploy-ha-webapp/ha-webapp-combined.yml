@@ -178,7 +178,7 @@ Resources:
             -   Ref: S3AccessIAMRole
 
 
-    # S3 Bucket Policy # Not entirely sure whether this is useful or necessary for this project
+    # S3 Bucket Policy
     S3AccessBucketPolicy:
         Type: AWS::S3::BucketPolicy
         Properties:
@@ -441,10 +441,10 @@ Resources:
         Properties:
             GroupDescription: Allow http traffic to and from load balancer
             SecurityGroupIngress:
-            -   CidrIp:     !Ref SSHLocation    # Describe the IP range
-                IpProtocol: tcp
-                FromPort:   22                  # Describe the port range
-                ToPort:     22
+            # -   CidrIp:     !Ref SSHLocation    # Describe the IP range
+            #     IpProtocol: tcp
+            #     FromPort:   22                  # Describe the port range
+            #     ToPort:     22
             -   CidrIp:     0.0.0.0/0           # Describe the IP range
                 IpProtocol: tcp
                 FromPort:   80                  # Describe the port range
@@ -462,7 +462,7 @@ Resources:
     WebServerSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
-            GroupDescription: Allow http traffic to hosts from outsite and SSH via Bastion Host
+            GroupDescription: Allow http traffic to hosts from outside and SSH via Bastion Host
             SecurityGroupIngress:
             -   CidrIp:     0.0.0.0/0           # Describe the IP range
                 IpProtocol: tcp
@@ -472,6 +472,11 @@ Resources:
                 IpProtocol: tcp
                 FromPort:   80                  # Describe the port range
                 ToPort:     80
+            SecurityGroupEgress:
+            -   CidrIp:     0.0.0.0/0           # Describe the IP range
+                IpProtocol: tcp
+                FromPort:   0                  # Describe the port range
+                ToPort:     65535
             Tags:
             -   Key: Name
                 Value: !Sub WebServerSecurityGroup
@@ -492,8 +497,6 @@ Resources:
             # -   Ref: LoadBalancerSecurityGroup
             -   Ref: WebServerSecurityGroup
             Subnets:
-            # -   Ref: PublicSubnet01
-            # -   Ref: PublicSubnet02
             -   Ref: PrivateSubnet01
             -   Ref: PrivateSubnet02
             Tags:
@@ -590,17 +593,35 @@ Resources:
             UserData:
                 Fn::Base64: !Sub |
                     #!/bin/bash
-                    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-                    yum update -y
+                    # A simple Hello World from the User-Data script
                     echo "Hello from user-data!"
 
+                    # Log EC2 Linux user-data to the console
+                    # This guidance was referenced at the following URL
+                    # https://aws.amazon.com/premiumsupport/knowledge-center/ec2-linux-log-user-data/
+                    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+                    # Update the local package registry
+                    echo "Attempting to update YUM packages"
+                    yum update -y
+
+                    # Install the Apache Server
+                    echo "Attempting to install the Apache Web Server"
                     yum install -y httpd
-                    systemctl start httpd
-                    systemctl enable httpd
-                    # wget -P ../../var/www/html s3://project-02-carlos/index.html
+                    # Start the Apache Server
+                    echo "Attempting to start the Apache Web Server"
+                    systemctl start httpd.service
+                    # Enable the Apache Server
+                    echo "Attempting to enable the Apache Web Server"
+                    systemctl enable httpd.service
+                    # Check the status of the Apache Server
+                    echo "Attempting to check the status of the Apache Web Server"
+                    systemctl status httpd.service
+
+                    # Copy site files from S3 to local directory
+                    echo "Attepmting to copy the site files from the S3 bucket to the local directory"
                     wget -P ../../var/www/html https://project-02-carlos.s3-us-west-2.amazonaws.com/index.html
 
-            ImageId: ami-0f2176987ee50226e # Amazon Linux
+            ImageId: ami-082b5a644766e0e6f # Amazon Linux
             # Select instance based on usage requirements
             # 2 vCPUs, 4GB of RAM, Linux AMI
             InstanceType: !Ref InstanceType
