@@ -43,7 +43,7 @@ Parameters:
         Description:
 
             "S3 bucket name to place the logs in. 
-            The value of 'access_logs.s3.bucket' cannot be greater than 63 characters "
+            The value of 'access_logs.s3.bucket' cannot be greater than 63 characters"
 
         Type: String
         Default: "project-02-carlos-logs"
@@ -147,12 +147,12 @@ Resources:
                 ToPort:         80
                 # Describe the IP range
                 CidrIp:         0.0.0.0/0
-            # -   IpProtocol:     tcp
-            #     # Describe the port range
-            #     FromPort:       22
-            #     ToPort:         22
-            #     # Describe the IP range
-            #     CidrIp:         0.0.0.0/0
+            -   IpProtocol:     tcp
+                # Describe the port range
+                FromPort:       22
+                ToPort:         22
+                # Describe the IP range
+                CidrIp:         0.0.0.0/0
             SecurityGroupEgress:
             -   IpProtocol:     tcp
                 # Describe the port range
@@ -186,16 +186,17 @@ Resources:
                     yum install -y httpd
                     systemctl start httpd
                     systemctl enable httpd
-                    wget -P ../../var/www/html s3://project-02-carlos/test-udagram-1/index.html
+                    wget -P ../../var/www/html s3://project-02-carlos/index.html
 
-            ImageId: ami-07b4f3c02c7f83d59
+            # ImageId: ami-07b4f3c02c7f83d59 # Ubuntu 18
+            ImageId: ami-0f2176987ee50226e # Amazon Linux
+            # Select instance based on usage requirements
+            # 2 vCPUs, 4GB of RAM, Ubuntu 18
+            InstanceType: !Ref 'InstanceType'
             KeyName: EC2InstanceAdministratorKey # SSH Key value here if/when necessary
             # Associate server instances with a SecurityGroup
             SecurityGroups: 
             - Ref: WebServerSecurityGroup
-            # Select instance based on usage requirements
-            # 2 vCPUs, 4GB of RAM, Ubuntu 18
-            InstanceType: !Ref 'InstanceType'
             # Add a Volume for storage to be used by the server
             BlockDeviceMappings:
             -   DeviceName: "/dev/sdk"
@@ -207,7 +208,10 @@ Resources:
         Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
             VPCZoneIdentifier:
-            - Fn::ImportValue: !Sub "${EnvironmentName}-PRI-NETS"
+            # Deploy the instances into the Private Subnets
+            # - Fn::ImportValue: !Sub "${EnvironmentName}-PRI-NETS"
+            # Deploy the instances into the Public Subnets
+            - Fn::ImportValue: !Sub "${EnvironmentName}-PUB-NETS"
             LaunchConfigurationName: 
                 Ref: WebAppLaunchConfig
             MinSize: '1'

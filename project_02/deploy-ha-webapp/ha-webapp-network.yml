@@ -94,6 +94,7 @@ Resources:
         Properties:
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
             CidrBlock: !Ref PublicSubnet01CIDR
+            MapPublicIpOnLaunch: true
             Tags: 
                 -   Key: Name
                     Value: !Sub ${EnvironmentName} Public Subnet 01 (AZ-A)
@@ -104,6 +105,7 @@ Resources:
         Properties:
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
             CidrBlock: !Ref PublicSubnet02CIDR
+            MapPublicIpOnLaunch: true
             Tags: 
                 -   Key: Name
                     Value: !Sub ${EnvironmentName} Public Subnet 02 (AZ-B)
@@ -115,6 +117,7 @@ Resources:
         Properties:
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
             CidrBlock: !Ref PrivateSubnet01CIDR
+            MapPublicIpOnLaunch: false
             Tags: 
                 -   Key: Name
                     Value: !Sub ${EnvironmentName} Private Subnet 01 (AZ-A)
@@ -125,6 +128,7 @@ Resources:
         Properties:
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
             CidrBlock: !Ref PrivateSubnet02CIDR
+            MapPublicIpOnLaunch: false
             Tags: 
                 -   Key: Name
                     Value: !Sub ${EnvironmentName} Private Subnet 02 (AZ-B)

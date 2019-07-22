@@ -51,8 +51,8 @@ Resources:
                     !Sub "${EnvironmentName}-VPCID"
             SecurityGroupIngress:
             -   IpProtocol: tcp
-                FromPort: 8080
-                ToPort: 8080
+                FromPort: 80
+                ToPort: 80
                 CidrIp: 0.0.0.0/0
             -   IpProtocol: tcp
                 FromPort: 22
@@ -70,37 +70,60 @@ Resources:
             UserData:
                 Fn::Base64: !Sub |
                     #!/bin/bash
-                    # Install docker
-                    # It may be required to use sudo to execute the following commands
-                    # Update the apt package index
-                    apt-get update -y
-                    # Install packages to allow apt to use a repository over HTTPS
-                    apt-get install -y \
-                    apt-transport-https \
-                    ca-certificates \
-                    curl \
-                    gnupg-agent \
-                    software-properties-common
-                    # Add Docker’s official GPG key
-                    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-                    # Set up the stable repository
-                    add-apt-repository \
-                    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-                    $(lsb_release -cs) \
-                    stable"
-                    # Update the apt package index
-                    apt-get update
-                    # Install the latest version of Docker CE and containerd
-                    apt-get install -y docker-ce docker-ce-cli containerd.io
-                    # Add the user 'docker' to the 'ubuntu' group
-                    usermod -aG docker ubuntu
-                    # Spin up a container running a tomcat server
-                    # Feel free to use your preferred web server here.
-                    # I don't think we'll be using any Java in this course,
-                    # so tomcat should be unnecessary and apache2 or nginx should suffice
-                    # I recommend using what you are most comfortable with.
-                    docker run -p 8080:8080 tomcat:8.0
-            ImageId: ami-005bdb005fb00e791
+                    # # Install docker
+                    # # It may be required to use sudo to execute the following commands
+                    # # Update the apt package index
+                    # apt-get update -y
+                    # # Install packages to allow apt to use a repository over HTTPS
+                    # apt-get install -y \
+                    # apt-transport-https \
+                    # ca-certificates \
+                    # curl \
+                    # gnupg-agent \
+                    # software-properties-common
+                    # # Add Docker’s official GPG key
+                    # curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+                    # # Set up the stable repository
+                    # add-apt-repository \
+                    # "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+                    # $(lsb_release -cs) \
+                    # stable"
+                    # # Update the apt package index
+                    # apt-get update
+                    # # Install the latest version of Docker CE and containerd
+                    # apt-get install -y docker-ce docker-ce-cli containerd.io
+                    # # Add the user 'docker' to the 'ubuntu' group
+                    # usermod -aG docker ubuntu
+                    # # Spin up a container running a tomcat server
+                    # # Feel free to use your preferred web server here.
+                    # # I don't think we'll be using any Java in this course,
+                    # # so tomcat should be unnecessary and apache2 or nginx should suffice
+                    # # I recommend using what you are most comfortable with.
+                    # docker run -p 8080:8080 tomcat:8.0
+
+                    yum update -y
+                    yum install -y httpd
+                    systemctl start httpd
+                    systemctl enable httpd
+                    # wget -P ../../var/www/html s3://project-02-carlos/index.html
+                    wget -P ../../var/www/html https://project-02-carlos.s3-us-west-2.amazonaws.com/index.html
+
+                    # sudo apt-get update -y
+                    # # install an Apache Web Server
+                    # sudo apt-get install apache2 -y
+                    # # Allow apache traffic to get through the firewall
+                    # # sudo ufw allow 'Apache'
+                    # # start the Apache Web Server
+                    # sudo systemctl start apache2.service
+                    # # enable the Apache Web Server to begin responding to requests
+                    # sudo systemctl enable apache2.service
+                    # # copy code (index.html) from S3 to the appropriate folder on the web server
+                    # # /var/www/html/
+                    # # wget -P ../../var/www/html s3://project-02-carlos/index.html
+                    # wget -P ../../var/www/html https://project-02-carlos.s3-us-west-2.amazonaws.com/index.html
+
+            # ImageId: ami-07b4f3c02c7f83d59 # Ubuntu 18
+            ImageId: ami-0f2176987ee50226e # Amazon Linux
             # KeyName: # SSH Key value here when necessary
             SecurityGroups:
             - Ref: WebServerSecGroup
@@ -118,7 +141,7 @@ Resources:
             LaunchConfigurationName: 
                 Ref: WebAppLaunchConfig
             MinSize: '1'
-            MaxSize: '5'
+            MaxSize: '2'
             TargetGroupARNs:
             -   Ref: WebAppTargetGroup
 
@@ -130,7 +153,7 @@ Resources:
             HealthCheckProtocol: HTTP
             HealthCheckTimeoutSeconds: 8
             HealthyThresholdCount: 2
-            Port: 8080
+            Port: 80
             Protocol: HTTP
             UnhealthyThresholdCount: 5
             VpcId:
@@ -169,5 +192,10 @@ Resources:
             ListenerArn: !Ref Listener
             Priority: 1
 
-# Outputs:
-#   set of outputs
+
+Outputs:
+    WebAppLoadBalancerDNSName:
+        Description: DNS name or Public URL of the Load Balancer
+        Value: !Join [ "", [ 'http://', !GetAtt WebAppLB.DNSName ]]
+        Export:
+            Name: !Sub ${EnvironmentName}-LB-DNSName
